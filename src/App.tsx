@@ -1,16 +1,7 @@
 import React, {useEffect, useState} from 'react';
-import logo from './logo.svg';
 import './App.css';
 import {handler} from "./google";
 
-const getExercises = async (sheet: any) => {
-
-    const arrExercises = await sheet.axios.get('values/A2:B')
-
-    return arrExercises.data.values.map((item: Array<number | string>) => {
-        return {id: item[0], name: item[1] || ''}
-    })
-}
 
 const checkWeight = (str: string) => {
 
@@ -18,39 +9,44 @@ const checkWeight = (str: string) => {
         return ({type: str.slice(-1), weight: str.slice(0, -1)})
     }
     return ({type: str.slice(-2), weight: str.slice(0, -2)})
-
 }
+const parseTrain = (trainString: string) => {
 
-const parseTrain = (arr: Array<string>) => {
+    return trainString.split('--').map(item => {
+        const arr = item.split('/')
 
-    return arr.map((item: string) => {
-        const trainArrStrings = item.split(' ')
-
-        const trainArrObjects = trainArrStrings[1].split('--').map(item => {
-            const arr = item.split('/')
-
-            return {...checkWeight(arr[0]), count: +arr[1].slice(0, -1)}
-        })
-        return {exercise: trainArrStrings[0].slice(1), approaches: trainArrObjects}
+        return {...checkWeight(arr[0]), count: +arr[1].slice(0, -1)}
     })
 }
-const getTrain = async (sheet: any) => {
 
-    const arrExercises = await sheet.axios.get('values/D2:P')
+const getTrains = (arr: Array<Array<string>>) => {
 
-    return arrExercises.data.values.map((item: Array<string>) => {
-        // console.log(parseTrain(item.slice(1)))
+    return arr.map((item: Array<string>) => ({
+        date: item[0],
+        train: item.slice(1).map((item: string, index: number) => ({
+            exercise: index,
+            result: item
+        })).filter((item) => !(item.result === ''))
+            .map(item => ({date: item.exercise, result: parseTrain(item.result)}))
+    }))
+}
 
-        return {date: item[0], exercises: parseTrain(item.slice(1)) || []}
-    })
+
+const getDataSheet = async (sheet: any) => {
+
+    const dataSheet = await sheet.axios.get('values/A1:ZZ?majorDimension=COLUMNS')
+    const {data: {values}} = dataSheet
+    const exercises = values[0].slice(1).map((item: string, index: number) => ({id: index, name: item}))
+    const trains = getTrains(values.slice(1))
+
+    return {trains, exercises}
 }
 
 
 function App() {
     const [sheet, setSheet] = useState(null)
-    const [exercises, setExercises] = useState([])
-    const [trains, setTrains] = useState([])
-    console.log(trains)
+    const [dataSheet, setDataSheet] = useState<object | null>(null)
+    console.log(dataSheet)
     useEffect(() => {
         handler().then((response) => setSheet(response))
 
@@ -58,11 +54,11 @@ function App() {
 
     useEffect(() => {
         if (sheet) {
-            getExercises(sheet).then(response => setExercises(response))
+            getDataSheet(sheet).then(response => setDataSheet(response))
 
-            getTrain(sheet).then(response => setTrains(response))
+            // getTrain(sheet).then(response => setTrains(response))
         }
-
+        return () => setSheet(null)
     }, [sheet])
 
 
